@@ -14,7 +14,8 @@ func saveCSVHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := r.ParseMultipartForm(10 << 20)
+	// Parse the multipart form, if it's a multipart form request
+	err := r.ParseMultipartForm(10 << 20) // max memory 10MB
 	if err != nil {
 		http.Error(w, "Unable to parse form", http.StatusBadRequest)
 		return
