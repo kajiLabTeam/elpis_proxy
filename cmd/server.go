@@ -43,11 +43,17 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("Received /api/register request:")
+	fmt.Printf("OrganizationID: %s, SystemURI: %s\n", req.OrganizationID, req.SystemURI)
+
 	resp := RegisterResponse{
 		Message: "Success",
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+
+	fmt.Println("Sent /api/register response:")
+	fmt.Printf("Message: %s\n", resp.Message)
 }
 
 func inquiryHandler(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +62,7 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.ParseMultipartForm(10 << 20)
+	r.ParseMultipartForm(10 << 20) // 10 MB の制限
 
 	wifiFile, _, err := r.FormFile("wifi_data")
 	if err != nil {
@@ -84,6 +90,7 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("Received /api/inquiry request:")
 	fmt.Println("WiFi Data:")
 	for _, row := range wifiData {
 		fmt.Println(row)
@@ -100,6 +107,9 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+
+	fmt.Println("Sent /api/inquiry response:")
+	fmt.Printf("Success: %t, PercentageProcessed: %d\n", resp.Success, resp.PercentageProcessed)
 }
 
 func parseCSV(file io.Reader) ([][]string, error) {
