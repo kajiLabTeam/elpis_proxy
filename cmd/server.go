@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
@@ -24,6 +26,10 @@ type InquiryResponse struct {
 	PercentageProcessed int  `json:"percentage_processed"`
 }
 
+type SignalResponse struct {
+	PercentageProcessed int `json:"percentage_processed"`
+}
+
 // Cache entry struct
 type cacheEntry struct {
 	value     string
@@ -31,8 +37,11 @@ type cacheEntry struct {
 }
 
 var (
-	cache = make(map[string]cacheEntry)
-	mutex = &sync.Mutex{}
+	cache  = make(map[string]cacheEntry)
+	mutex  = &sync.Mutex{}
+	client = &http.Client{
+		Timeout: 5 * time.Second, // Set timeout for each request
+	}
 )
 
 func main() {
@@ -145,15 +154,79 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(row)
 	}
 
+	// Send POST request to each system_uri in the cache
+	maxPercentage := 0
+	var wg sync.WaitGroup
+	responseChan := make(chan int, len(cache))
+
+	mutex.Lock()
+	for _, entry := range cache {
+		wg.Add(1)
+		go func(systemURI string) {
+			defer wg.Done()
+			percentage := querySystem(systemURI)
+			responseChan <- percentage
+		}(entry.value)
+	}
+	mutex.Unlock()
+
+	wg.Wait()
+	close(responseChan)
+
+	for percentage := range responseChan {
+		if percentage > maxPercentage {
+			maxPercentage = percentage
+		}
+	}
+
 	resp := InquiryResponse{
 		Success:             true,
-		PercentageProcessed: 100,
+		PercentageProcessed: maxPercentage,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 
 	fmt.Println("Sent /api/inquiry response:")
 	fmt.Printf("Success: %t, PercentageProcessed: %d\n", resp.Success, resp.PercentageProcessed)
+}
+
+func querySystem(systemURI string) int {
+	signalRequest := map[string]string{
+		"data": "dummy_data", // Replace with actual data if needed
+	}
+	requestBody, err := json.Marshal(signalRequest)
+	if err != nil {
+		fmt.Printf("Error marshaling request for %s: %v\n", systemURI, err)
+		return 0
+	}
+
+	req, err := http.NewRequest("POST", systemURI+"/api/signals/server", bytes.NewBuffer(requestBody))
+	if err != nil {
+		fmt.Printf("Error creating request for %s: %v\n", systemURI, err)
+		return 0
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending request to %s: %v\n", systemURI, err)
+		return 0
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading response from %s: %v\n", systemURI, err)
+		return 0
+	}
+
+	var signalResponse SignalResponse
+	if err := json.Unmarshal(body, &signalResponse); err != nil {
+		fmt.Printf("Error unmarshaling response from %s: %v\n", systemURI, err)
+		return 0
+	}
+
+	return signalResponse.PercentageProcessed
 }
 
 func parseCSV(file io.Reader) ([][]string, error) {
