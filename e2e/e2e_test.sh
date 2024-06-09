@@ -5,7 +5,8 @@ SERVER_URL="http://localhost:8080"
 # 連合登録のテスト
 REGISTER_ENDPOINT="$SERVER_URL/api/register"
 REGISTER_PAYLOAD='{
-  "system_uri": "http://example.com/system"
+  "system_uri": "http://example.com/system",
+  "port": 8010
 }'
 
 echo "Testing /api/register endpoint..."

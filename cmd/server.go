@@ -15,6 +15,7 @@ import (
 
 type RegisterRequest struct {
 	SystemURI string `json:"system_uri"`
+	Port      int    `json:"port"`
 }
 
 type RegisterResponse struct {
@@ -32,7 +33,8 @@ type SignalResponse struct {
 
 // Cache entry struct
 type cacheEntry struct {
-	value     string
+	systemURI string
+	port      int
 	timestamp time.Time
 }
 
@@ -73,12 +75,13 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Println("Received /api/register request:")
-	fmt.Printf("SystemURI: %s\n", req.SystemURI)
+	fmt.Printf("SystemURI: %s, Port: %d\n", req.SystemURI, req.Port)
 
 	// Add to cache
 	mutex.Lock()
 	cache[req.SystemURI] = cacheEntry{
-		value:     req.SystemURI,
+		systemURI: req.SystemURI,
+		port:      req.Port,
 		timestamp: time.Now(),
 	}
 	mutex.Unlock()
@@ -162,11 +165,11 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	for _, entry := range cache {
 		wg.Add(1)
-		go func(systemURI string) {
+		go func(systemURI string, port int) {
 			defer wg.Done()
-			percentage := querySystem(systemURI)
+			percentage := querySystem(systemURI, port)
 			responseChan <- percentage
-		}(entry.value)
+		}(entry.systemURI, entry.port)
 	}
 	mutex.Unlock()
 
@@ -190,7 +193,8 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Success: %t, PercentageProcessed: %d\n", resp.Success, resp.PercentageProcessed)
 }
 
-func querySystem(systemURI string) int {
+func querySystem(systemURI string, port int) int {
+	url := fmt.Sprintf("%s:%d/api/signals/server", systemURI, port)
 	signalRequest := map[string]string{
 		"data": "dummy_data", // Replace with actual data if needed
 	}
@@ -200,7 +204,7 @@ func querySystem(systemURI string) int {
 		return 0
 	}
 
-	req, err := http.NewRequest("POST", systemURI+"/api/signals/server", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
 	if err != nil {
 		fmt.Printf("Error creating request for %s: %v\n", systemURI, err)
 		return 0
