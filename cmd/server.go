@@ -10,8 +10,7 @@ import (
 )
 
 type RegisterRequest struct {
-	OrganizationID string `json:"organization_id"`
-	SystemURI      string `json:"system_uri"`
+	SystemURI string `json:"system_uri"`
 }
 
 type RegisterResponse struct {
@@ -44,7 +43,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Println("Received /api/register request:")
-	fmt.Printf("OrganizationID: %s, SystemURI: %s\n", req.OrganizationID, req.SystemURI)
+	fmt.Printf("SystemURI: %s\n", req.SystemURI)
 
 	resp := RegisterResponse{
 		Message: "Success",

@@ -5,7 +5,6 @@ SERVER_URL="http://localhost:8080"
 # 連合登録のテスト
 REGISTER_ENDPOINT="$SERVER_URL/api/register"
 REGISTER_PAYLOAD='{
-  "organization_id": "org123",
   "system_uri": "http://example.com/system"
 }'
 
