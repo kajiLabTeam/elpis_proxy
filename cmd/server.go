@@ -47,11 +47,16 @@ func main() {
 }
 
 func registerHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method == http.MethodPost {
+		handleRegisterPost(w, r)
+	} else if r.Method == http.MethodGet {
+		handleRegisterGet(w, r)
+	} else {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
+}
 
+func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -77,6 +82,22 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Sent /api/register response:")
 	fmt.Printf("Message: %s\n", resp.Message)
+}
+
+func handleRegisterGet(w http.ResponseWriter, r *http.Request) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Create a copy of the cache to avoid race conditions
+	cacheCopy := make(map[string]cacheEntry)
+	for key, entry := range cache {
+		cacheCopy[key] = entry
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cacheCopy)
+
+	fmt.Println("Sent /api/register GET response with current cache state")
 }
 
 func inquiryHandler(w http.ResponseWriter, r *http.Request) {
