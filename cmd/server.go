@@ -84,7 +84,7 @@ func handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Message: %s\n", resp.Message)
 }
 
-func handleRegisterGet(w http.ResponseWriter, r *http.Request) {
+func handleRegisterGet(w http.ResponseWriter, _ *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
