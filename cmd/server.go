@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
+	"time"
 )
 
 type RegisterRequest struct {
@@ -22,9 +24,23 @@ type InquiryResponse struct {
 	PercentageProcessed int  `json:"percentage_processed"`
 }
 
+// Cache entry struct
+type cacheEntry struct {
+	value     string
+	timestamp time.Time
+}
+
+var (
+	cache = make(map[string]cacheEntry)
+	mutex = &sync.Mutex{}
+)
+
 func main() {
 	http.HandleFunc("/api/register", registerHandler)
 	http.HandleFunc("/api/inquiry", inquiryHandler)
+
+	// Start a goroutine to clean up expired cache entries every hour
+	go cleanupCache()
 
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -45,6 +61,14 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Received /api/register request:")
 	fmt.Printf("SystemURI: %s\n", req.SystemURI)
 
+	// Add to cache
+	mutex.Lock()
+	cache[req.SystemURI] = cacheEntry{
+		value:     req.SystemURI,
+		timestamp: time.Now(),
+	}
+	mutex.Unlock()
+
 	resp := RegisterResponse{
 		Message: "Success",
 	}
@@ -61,7 +85,7 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.ParseMultipartForm(10 << 20) // 10 MB の制限
+	r.ParseMultipartForm(10 << 20) // 10 MB limit
 
 	wifiFile, _, err := r.FormFile("wifi_data")
 	if err != nil {
@@ -125,4 +149,19 @@ func parseCSV(file io.Reader) ([][]string, error) {
 		data = append(data, record)
 	}
 	return data, nil
+}
+
+func cleanupCache() {
+	for {
+		time.Sleep(1 * time.Hour)
+		mutex.Lock()
+		now := time.Now()
+		for key, entry := range cache {
+			if now.Sub(entry.timestamp) > 24*time.Hour {
+				delete(cache, key)
+				fmt.Printf("Deleted expired cache entry: %s\n", key)
+			}
+		}
+		mutex.Unlock()
+	}
 }
