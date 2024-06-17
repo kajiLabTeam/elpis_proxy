@@ -45,6 +45,8 @@ var (
 	client = &http.Client{
 		Timeout: 5 * time.Second, // Set timeout for each request
 	}
+	queryCounter int
+	counterMutex = &sync.Mutex{}
 )
 
 func main() {
@@ -192,9 +194,18 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Sent /api/inquiry response:")
 	fmt.Printf("Success: %t, PercentageProcessed: %d\n", resp.Success, resp.PercentageProcessed)
+
+	// Print the total number of times querySystem was called
+	counterMutex.Lock()
+	fmt.Printf("querySystem was called %d times\n", queryCounter)
+	counterMutex.Unlock()
 }
 
 func querySystem(systemURI string, port int, wifiData, bleData [][]string) int {
+	counterMutex.Lock()
+	queryCounter++
+	counterMutex.Unlock()
+
 	url := fmt.Sprintf("%s:%d/api/signals/server", systemURI, port)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
