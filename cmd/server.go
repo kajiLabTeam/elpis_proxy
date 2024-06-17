@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"sync"
 	"time"
@@ -167,7 +168,7 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(systemURI string, port int) {
 			defer wg.Done()
-			percentage := querySystem(systemURI, port)
+			percentage := querySystem(systemURI, port, wifiData, bleData)
 			responseChan <- percentage
 		}(entry.systemURI, entry.port)
 	}
@@ -193,23 +194,41 @@ func inquiryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Success: %t, PercentageProcessed: %d\n", resp.Success, resp.PercentageProcessed)
 }
 
-func querySystem(systemURI string, port int) int {
+func querySystem(systemURI string, port int, wifiData, bleData [][]string) int {
 	url := fmt.Sprintf("%s:%d/api/signals/server", systemURI, port)
-	signalRequest := map[string]string{
-		"data": "dummy_data", // Replace with actual data if needed
-	}
-	requestBody, err := json.Marshal(signalRequest)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Write WiFi data
+	wifiPart, err := writer.CreateFormFile("wifi_data", "wifi_data.csv")
 	if err != nil {
-		fmt.Printf("Error marshaling request for %s: %v\n", systemURI, err)
+		fmt.Printf("Error creating WiFi form file for %s: %v\n", systemURI, err)
+		return 0
+	}
+	if err := writeCSV(wifiPart, wifiData); err != nil {
+		fmt.Printf("Error writing WiFi CSV for %s: %v\n", systemURI, err)
 		return 0
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
+	// Write BLE data
+	blePart, err := writer.CreateFormFile("ble_data", "ble_data.csv")
+	if err != nil {
+		fmt.Printf("Error creating BLE form file for %s: %v\n", systemURI, err)
+		return 0
+	}
+	if err := writeCSV(blePart, bleData); err != nil {
+		fmt.Printf("Error writing BLE CSV for %s: %v\n", systemURI, err)
+		return 0
+	}
+
+	writer.Close()
+
+	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		fmt.Printf("Error creating request for %s: %v\n", systemURI, err)
 		return 0
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -218,19 +237,30 @@ func querySystem(systemURI string, port int) int {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("Error reading response from %s: %v\n", systemURI, err)
 		return 0
 	}
 
 	var signalResponse SignalResponse
-	if err := json.Unmarshal(body, &signalResponse); err != nil {
+	if err := json.Unmarshal(respBody, &signalResponse); err != nil {
 		fmt.Printf("Error unmarshaling response from %s: %v\n", systemURI, err)
 		return 0
 	}
 
 	return signalResponse.PercentageProcessed
+}
+
+func writeCSV(writer io.Writer, data [][]string) error {
+	csvWriter := csv.NewWriter(writer)
+	for _, record := range data {
+		if err := csvWriter.Write(record); err != nil {
+			return err
+		}
+	}
+	csvWriter.Flush()
+	return csvWriter.Error()
 }
 
 func parseCSV(file io.Reader) ([][]string, error) {
