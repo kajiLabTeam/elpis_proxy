@@ -19,7 +19,7 @@ build/pi64: ## Build for Raspberry Pi 64-bit
 
 .PHONY: e2e
 e2e: ## Run end-to-end tests
-	@./e2e/e2e_test.sh
+	@./e2e/test.sh
 
 help: ## Display this help screen
 	@grep -E '^[a-zA-Z/_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
